@@ -28,8 +28,6 @@ class Config:
                  generation_max: int,
                  turn_min: int,
                  turn_max: int,
-                 protection_ratio: float,
-                 critical_ratio: float,
                  min_status: dict,
                  max_status: dict,
                  character_status: dict,
@@ -41,8 +39,6 @@ class Config:
         self.generation_max = generation_max  # 最大世代数
         self.turn_min = turn_min  # 最小ターン数
         self.turn_max = turn_max  # 最大ターン数
-        self.protection_ratio = protection_ratio  # 防御率
-        self.critical_ratio = critical_ratio  # クリティカル時のダメージ倍率
         self.min_status = self.__convert_dict_to_status(min_status)  # 最小ステータス値
         self.max_status = self.__convert_dict_to_status(max_status)  # 最大ステータス値
         self.character_status = self.__convert_dict_to_status(character_status)  # キャラクターのステータス
@@ -120,7 +116,7 @@ def battle(character: Unit, monster: Unit, config: Config) -> Tuple[BattleResult
             defender = character if attacker.is_monster else monster
 
             hp = hp_map[defender.id]
-            hp -= calc_damage(attacker, defender, config)
+            hp -= calc_damage(attacker, defender)
             hp = max(0, hp)
             hp_map[defender.id] = hp
 
@@ -141,12 +137,12 @@ def battle(character: Unit, monster: Unit, config: Config) -> Tuple[BattleResult
     return result, turn
 
 
-def calc_damage(attacker: Unit, defender: Unit, config: Config) -> int:
+def calc_damage(attacker: Unit, defender: Unit) -> int:
     luc = attacker.luc / 100.0
-    c = config.critical_ratio if random.random() <= luc else 1.0
+    c = 2.0 if random.random() <= luc else 1.0
     atk = attacker.atk
     def_ = defender.def_
-    damage = int((atk - def_ * config.protection_ratio) * c)
+    damage = int((atk - def_ * 0.5) * c)
     return max(0, damage)
 
 

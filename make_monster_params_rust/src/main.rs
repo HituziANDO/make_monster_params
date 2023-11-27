@@ -35,10 +35,6 @@ struct Config {
     turn_min: i32,
     /// 最大ターン数
     turn_max: i32,
-    /// 防御率
-    protection_ratio: f32,
-    /// クリティカル時のダメージ倍率
-    critical_ratio: f32,
     /// 最小ステータス値
     min_status: Status,
     /// 最大ステータス値
@@ -158,7 +154,7 @@ fn battle(character: &mut Unit, monster: Unit, config: &Config) -> (BattleResult
             };
 
             let mut hp = *hp_map.get(&defender.id).unwrap();
-            hp -= calc_damage(&attacker, &defender, &config, &mut rng);
+            hp -= calc_damage(&attacker, &defender, &mut rng);
             hp = cmp::max(0, hp);
             hp_map.insert(defender.id, hp);
 
@@ -184,12 +180,12 @@ fn battle(character: &mut Unit, monster: Unit, config: &Config) -> (BattleResult
     (result, turn)
 }
 
-fn calc_damage(attacker: &Unit, defender: &Unit, config: &Config, rng: &mut ThreadRng) -> i32 {
+fn calc_damage(attacker: &Unit, defender: &Unit, rng: &mut ThreadRng) -> i32 {
     let luc = attacker.luc as f32 / 100.0;
-    let c = if rng.gen::<f32>() <= luc { config.critical_ratio } else { 1.0 };
+    let c = if rng.gen::<f32>() <= luc { 2.0 } else { 1.0 };
     let atk = attacker.atk as f32;
     let def = defender.def as f32;
-    let damage = ((atk - def * config.protection_ratio) * c).floor() as i32;
+    let damage = ((atk - def * 0.5) * c).floor() as i32;
     cmp::max(0, damage)
 }
 
