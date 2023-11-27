@@ -1,12 +1,11 @@
-# make_monster_params
+# make_monster_params_rust
 
 Monster Parameter Generation Tool
 
 ## Build
 
 ```
-cargo build --release
-mv target/release/make_monster_params ./
+./build.sh
 ```
 
 ## Usage

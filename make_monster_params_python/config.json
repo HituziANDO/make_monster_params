@@ -1,0 +1,32 @@
+{
+  "gene_num": 20,
+  "selection_rate": 0.3,
+  "mutation_rate": 0.02,
+  "generation_max": 500000,
+  "turn_min": 3,
+  "turn_max": 10,
+  "protection_ratio": 0.5,
+  "critical_ratio": 2.0,
+  "min_status": {
+    "max_hp": 1,
+    "atk": 1,
+    "def": 0,
+    "luc": 0,
+    "speed": 1
+  },
+  "max_status": {
+    "max_hp": 1000,
+    "atk": 1000,
+    "def": 1000,
+    "luc": 10,
+    "speed": 255
+  },
+  "character_status": {
+    "max_hp": 200,
+    "atk": 15,
+    "def": 10,
+    "luc": 5,
+    "speed": 10
+  },
+  "show_progress": false
+ }

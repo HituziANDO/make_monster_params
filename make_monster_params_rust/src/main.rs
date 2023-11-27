@@ -31,8 +31,6 @@ struct Config {
     mutation_rate: f32,
     /// 最大世代数
     generation_max: i32,
-    /// 許容誤差(0~1.0)
-    allowable_error: f32,
     /// 最小ターン数
     turn_min: i32,
     /// 最大ターン数
@@ -164,7 +162,7 @@ fn battle(character: &mut Unit, monster: Unit, config: &Config) -> (BattleResult
             hp = cmp::max(0, hp);
             hp_map.insert(defender.id, hp);
 
-            if is_dead(&defender.id, &hp_map) {
+            if *hp_map.get(&defender.id).unwrap() <= 0 {
                 if defender.is_monster {
                     stop = Some(BattleResult::Win);
                     break;
@@ -181,15 +179,9 @@ fn battle(character: &mut Unit, monster: Unit, config: &Config) -> (BattleResult
         };
     };
 
-    let hp = *hp_map.get(&character.id).unwrap();
-    character.hp = hp;
+    character.hp = *hp_map.get(&character.id).unwrap();
 
     (result, turn)
-}
-
-fn is_dead(unit_id: &Uuid, hp_map: &HashMap<Uuid, i32>) -> bool {
-    let hp = *hp_map.get(unit_id).unwrap();
-    hp <= 0
 }
 
 fn calc_damage(attacker: &Unit, defender: &Unit, config: &Config, rng: &mut ThreadRng) -> i32 {
@@ -226,7 +218,7 @@ impl FitnessFunc {
             WORST_SCORE
         } else if result == BattleResult::Draw {
             WORST_SCORE - 1.0
-        } else if turn <= self.config.turn_min {
+        } else if turn < self.config.turn_min {
             WORST_SCORE - 1.0
         } else {
             hp_ratio
@@ -246,10 +238,6 @@ impl FitnessFunc {
 
 /// GAで求めるパラメータセット
 type GeneParams = Status;
-/// パラメータが取りうる範囲の最大値を格納する構造体
-type MaxValuesOfStatus = GeneParams;
-/// パラメータが取りうる範囲の最小値を格納する構造体
-type MinValuesOfStatus = GeneParams;
 
 #[derive(Clone, Copy, Debug)]
 struct Gene {
@@ -300,8 +288,8 @@ impl GeneMask {
 }
 
 struct Mutation {
-    min: MinValuesOfStatus,
-    max: MaxValuesOfStatus,
+    min: Status,
+    max: Status,
 }
 
 impl Mutation {
@@ -325,30 +313,33 @@ impl Mutation {
     }
 
     /// 突然変異させます
-    fn mutate(&self, gene: &mut Gene) {
+    fn mutated(&self, gene: &Gene, rate: f32) -> Gene {
         let mut rng = rand::thread_rng();
         let hp = Uniform::from(self.min.max_hp..=self.max.max_hp);
         let atk = Uniform::from(self.min.atk..=self.max.atk);
         let def = Uniform::from(self.min.def..=self.max.def);
         let luc = Uniform::from(self.min.luc..=self.max.luc);
         let speed = Uniform::from(self.min.speed..=self.max.speed);
-        let mask: GeneMask = GeneMask::new();
+        let mut params = gene.params.clone();
 
-        if mask.max_hp {
-            gene.params.max_hp = hp.sample(&mut rng);
+        // rng.gen::<f32>() -> 0 <= p < 1.0
+        if rng.gen::<f32>() <= rate {
+            params.max_hp = hp.sample(&mut rng);
         }
-        if mask.atk {
-            gene.params.atk = atk.sample(&mut rng);
+        if rng.gen::<f32>() <= rate {
+            params.atk = atk.sample(&mut rng);
         }
-        if mask.def {
-            gene.params.def = def.sample(&mut rng);
+        if rng.gen::<f32>() <= rate {
+            params.def = def.sample(&mut rng);
         }
-        if mask.luc {
-            gene.params.luc = luc.sample(&mut rng);
+        if rng.gen::<f32>() <= rate {
+            params.luc = luc.sample(&mut rng);
         }
-        if mask.speed {
-            gene.params.speed = speed.sample(&mut rng);
+        if rng.gen::<f32>() <= rate {
+            params.speed = speed.sample(&mut rng);
         }
+
+        Gene::new(params)
     }
 }
 
@@ -375,11 +366,6 @@ impl GeneticAlgorithm {
     /// 次世代に残す遺伝子の数を返します
     fn selection_num(&self) -> usize {
         (self.config.gene_num as f32 * self.config.selection_rate).floor() as usize
-    }
-
-    /// 許容誤差を返します
-    fn allowable_score(&self) -> Fitness {
-        self.config.allowable_error
     }
 
     /// ベストスコアを返します
@@ -409,9 +395,6 @@ impl GeneticAlgorithm {
         // 次世代に残す遺伝子の数
         let selection_num = self.selection_num();
 
-        // 適合度がこの誤差内に収まるときループを早期終了
-        let allowable_score = self.allowable_score();
-
         // 初期世代の生成
         for _ in 0..gene_num {
             self.genes.push(self.mutation.new_at_random());
@@ -429,7 +412,7 @@ impl GeneticAlgorithm {
         // 現在の世代
         let mut generation = 1;
         loop {
-            // 適合度降順(優良順)にソート
+            // 適合度降順(優良順)にソート (優良順はfitnessの値が小さい順)
             self.genes.sort_by(|a, b| a.fitness.partial_cmp(&b.fitness).unwrap());
 
             let best_score = self.best_score();
@@ -441,53 +424,37 @@ impl GeneticAlgorithm {
             if generation >= self.config.generation_max {
                 // Finish
                 break;
-            } else if best_score <= allowable_score {
-                println!("early stopping!");
-                break;
             }
 
             // 選択
             // 優良個体を次世代に残す
             let mut new_genes = self.head(selection_num);
 
-            // 選択されなかった個数分、交叉または突然変異により生成する
-            let mut rng = rand::thread_rng();
+            // 選択されなかった個数分、交叉・突然変異により生成する
             loop {
-                // rng.gen::<f32>() -> 0 <= p < 1.0
-                if rng.gen::<f32>() <= self.config.mutation_rate {
-                    // 突然変異
-                    let mut g = self.sample();
-                    self.mutation.mutate(&mut g);
+                // 両親の選択
+                let parents = self.select_parents();
+                // 交叉
+                let children = self.crossover(&parents.0, &parents.1);
 
-                    // 適合度計算
-                    g.fitness = ff.calc(&g.params).0;
-                    new_genes.push(g);
-                    if new_genes.len() == gene_num {
-                        break;
-                    }
-                } else {
-                    // 両親の選択
-                    let parents = self.select_parents();
-                    // 交叉
-                    let children = self.crossover(&parents.0, &parents.1);
+                // 子1
+                // 突然変異
+                let mut g1 = self.mutation.mutated(&children.0, self.config.mutation_rate);
+                // 適合度計算
+                g1.fitness = ff.calc(&g1.params).0;
+                new_genes.push(g1);
+                if new_genes.len() == gene_num {
+                    break;
+                }
 
-                    // 子1
-                    let mut g1 = children.0;
-                    // 適合度計算
-                    g1.fitness = ff.calc(&g1.params).0;
-                    new_genes.push(g1);
-                    if new_genes.len() == gene_num {
-                        break;
-                    }
-
-                    // 子2
-                    let mut g2 = children.1;
-                    // 適合度計算
-                    g2.fitness = ff.calc(&g2.params).0;
-                    new_genes.push(g2);
-                    if new_genes.len() == gene_num {
-                        break;
-                    }
+                // 子2
+                // 突然変異
+                let mut g2 = self.mutation.mutated(&children.1, self.config.mutation_rate);
+                // 適合度計算
+                g2.fitness = ff.calc(&g2.params).0;
+                new_genes.push(g2);
+                if new_genes.len() == gene_num {
+                    break;
                 }
             }
             self.genes = new_genes;
