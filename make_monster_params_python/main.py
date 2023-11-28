@@ -7,20 +7,31 @@ import uuid
 
 
 class Status:
-    """ Statusクラスの定義 """
-
     def __init__(self, max_hp: int, atk: int, def_: int, luc: int, speed: int):
-        """ コンストラクタ """
-        self.max_hp = max_hp  # 最大HP
-        self.atk = atk  # 攻撃力
-        self.def_ = def_  # 防御力
-        self.luc = luc  # 運(0~100)
-        self.speed = speed  # 速度
+        """
+        Constructor
+
+        Parameters
+        ----------
+        max_hp : int
+            Max HP
+        atk : int
+            Attack
+        def_ : int
+            Defense
+        luc : int
+            Luck(0~100)
+        speed : int
+            Speed
+        """
+        self.max_hp = max_hp
+        self.atk = atk
+        self.def_ = def_
+        self.luc = luc
+        self.speed = speed
 
 
 class Config:
-    """ Configクラスの定義 """
-
     def __init__(self,
                  gene_num: int,
                  selection_rate: float,
@@ -32,21 +43,46 @@ class Config:
                  max_status: dict,
                  character_status: dict,
                  show_progress: bool):
-        """ コンストラクタ """
-        self.gene_num = gene_num  # 遺伝子数
-        self.selection_rate = selection_rate  # 選択率(0~1.0)
-        self.mutation_rate = mutation_rate  # 突然変異率(0~1.0)
-        self.generation_max = generation_max  # 最大世代数
-        self.turn_min = turn_min  # 最小ターン数
-        self.turn_max = turn_max  # 最大ターン数
-        self.min_status = self.__convert_dict_to_status(min_status)  # 最小ステータス値
-        self.max_status = self.__convert_dict_to_status(max_status)  # 最大ステータス値
-        self.character_status = self.__convert_dict_to_status(character_status)  # キャラクターのステータス
-        self.show_progress = show_progress  # GAの経過を表示するか
+        """
+        Constructor
+
+        Parameters
+        ----------
+        gene_num : int
+            Number of genes
+        selection_rate : float
+            Selection rate(0~1.0)
+        mutation_rate : float
+            Mutation rate(0~1.0)
+        generation_max : int
+            Maximum number of generations
+        turn_min : int
+            Minimum number of turns
+        turn_max : int
+            Maximum number of turns
+        min_status : dict
+            Minimum status value
+        max_status : dict
+            Maximum status value
+        character_status : dict
+            Player's status
+        show_progress : bool
+            True if you want to display the progress
+        """
+        self.gene_num = gene_num
+        self.selection_rate = selection_rate
+        self.mutation_rate = mutation_rate
+        self.generation_max = generation_max
+        self.turn_min = turn_min
+        self.turn_max = turn_max
+        self.min_status = self.__convert_dict_to_status(min_status)
+        self.max_status = self.__convert_dict_to_status(max_status)
+        self.character_status = self.__convert_dict_to_status(character_status)
+        self.show_progress = show_progress
 
     @classmethod
     def read_from_json(cls):
-        """ config.jsonからConfigを読み込みます """
+        """ Loads Config from config.json. """
         with open('config.json', 'r') as f:
             data = json.load(f)
         return cls(**data)
@@ -97,6 +133,12 @@ class BattleResult(Enum):
 
 
 def battle(character: Unit, monster: Unit, config: Config) -> Tuple[BattleResult, int]:
+    """
+    Returns
+    -------
+    Tuple[BattleResult, int]
+        A tuple of BattleResult and the number of turns completed.
+    """
     units = sorted([character, monster], key=lambda u: u.speed, reverse=True)
 
     hp_map = {u.id: u.hp for u in units}
@@ -111,8 +153,10 @@ def battle(character: Unit, monster: Unit, config: Config) -> Tuple[BattleResult
         stop = None
         for attacker in units:
             if hp_map[attacker.id] <= 0:
+                # Already dead
                 continue
 
+            # Target of an attack
             defender = character if attacker.is_monster else monster
 
             hp = hp_map[defender.id]
@@ -156,10 +200,10 @@ class FitnessFunc:
 
         result, turn = battle(character, monster, self.config)
 
-        # 残りHPの割合
+        # Percentage of HP remaining
         hp_ratio = float(character.hp) / float(character.max_hp)
 
-        # 適合度
+        # Fitness
         if result == BattleResult.GAME_OVER:
             score = WORST_SCORE
         elif result == BattleResult.DRAW:
@@ -179,7 +223,7 @@ class FitnessFunc:
         return score, result
 
 
-# GAで求めるパラメータセット
+# Parameters of Gene
 GeneParams = Status
 
 
@@ -196,6 +240,7 @@ class Gene:
 
 class GeneMask:
     def __init__(self):
+        """ Generates True or False mask for each field at random. """
         self.max_hp = random.choice([True, False])
         self.atk = random.choice([True, False])
         self.def_ = random.choice([True, False])
@@ -209,6 +254,7 @@ class Mutation:
         self.max = max
 
     def new_at_random(self) -> Gene:
+        """ Generates individuals at random. """
         params = GeneParams(
             max_hp=random.randint(self.min.max_hp, self.max.max_hp),
             atk=random.randint(self.min.atk, self.max.atk),
@@ -219,6 +265,7 @@ class Mutation:
         return Gene(params)
 
     def mutated(self, gene: Gene, rate: float) -> Gene:
+        """ Mutates. """
         return Gene(GeneParams(
             max_hp=gene.params.max_hp if random.random() > rate else random.randint(self.min.max_hp, self.max.max_hp),
             atk=gene.params.atk if random.random() > rate else random.randint(self.min.atk, self.max.atk),
@@ -229,45 +276,50 @@ class Mutation:
 
 
 class GeneticAlgorithm:
-    def __init__(self, config: Config, mutation: Mutation):
+    def __init__(self, config: Config):
         self.config = config
-        self.mutation = mutation
         self.genes = []
 
     def selection_num(self) -> int:
+        """ Returns the number of individuals to leave to the next generation. """
         return int(self.config.gene_num * self.config.selection_rate)
 
     def best_score(self) -> Fitness:
+        """ Returns the best score. """
         return self.genes[0].fitness
 
     def head(self, num) -> list:
+        """ Returns the specified number of individuals from the head. """
         return self.genes[:num]
 
     def sample(self) -> Gene:
+        """ Returns one randomly selected individual. """
         return random.choice(self.genes)
 
-    def exec(self) -> int:
+    def exec(self):
+        """ Executes the genetic algorithm. """
         gene_num = self.config.gene_num
 
-        # 次世代に残す遺伝子の数
         selection_num = self.selection_num()
 
-        # 初期世代の生成
+        mutation = Mutation(min=self.config.min_status, max=self.config.max_status)
+
+        # Generates initial generation
         for _ in range(gene_num):
-            self.genes.append(self.mutation.new_at_random())
+            self.genes.append(mutation.new_at_random())
 
         ff = FitnessFunc(self.config)
 
-        # 適合度計算
+        # Calculates the fitness each individual
         for gene in self.genes:
             gene.fitness = ff.calc(gene.params)[0]
 
-        # 現在のベストスコア
+        # Current best score
         cur_best_score = WORST_SCORE
-        # 現在の世代
+        # Current generation
         generation = 1
         while True:
-            # 適合度降順(優良順)にソート (優良順はfitnessの値が小さい順)
+            # Sorts in descending order of goodness of fitness
             self.genes = sorted(self.genes, key=lambda gene: gene.fitness)
 
             best_score = self.best_score()
@@ -279,30 +331,30 @@ class GeneticAlgorithm:
                 # Finish
                 break
 
-            # 選択
-            # 優良個体を次世代に残す
+            # Selection
+            # Leaves superior individuals to the next generation
             new_genes = self.head(selection_num)
 
-            # 選択されなかった個数分、交叉・突然変異により生成する
+            # Generates individuals by crossover and mutation for the number of unselected
             while len(new_genes) < gene_num:
-                # 両親の選択
+                # Select parents
                 parents = self.select_parents()
-                # 交叉
+                # Crossover
                 children = self.crossover(parents[0], parents[1])
 
-                # 子1
-                # 突然変異
-                g1 = self.mutation.mutated(children[0], self.config.mutation_rate)
-                # 適合度計算
+                # Child1
+                # Mutation
+                g1 = mutation.mutated(children[0], self.config.mutation_rate)
+                # Calculates the fitness
                 g1.fitness = ff.calc(g1.params)[0]
                 new_genes.append(g1)
                 if len(new_genes) == gene_num:
                     break
 
-                # 子2
-                # 突然変異
-                g2 = self.mutation.mutated(children[1], self.config.mutation_rate)
-                # 適合度計算
+                # Child2
+                # Mutation
+                g2 = mutation.mutated(children[1], self.config.mutation_rate)
+                # Calculates the fitness
                 g2.fitness = ff.calc(g2.params)[0]
                 new_genes.append(g2)
                 if len(new_genes) == gene_num:
@@ -312,16 +364,25 @@ class GeneticAlgorithm:
 
             generation += 1
 
-        return generation
-
-    def select_parents(self):
+    def select_parents(self) -> Tuple[Gene, Gene]:
+        """ Selects parents at random. """
         p1 = self.sample()
         p2 = p1
         while p1.id == p2.id:
             p2 = self.sample()
         return p1, p2
 
-    def crossover(self, p1, p2):
+    def crossover(self, p1: Gene, p2: Gene) -> Tuple[Gene, Gene]:
+        """
+        Parent 1 and Parent 2 are crossed to produce new individuals.
+
+        Parameters
+        ----------
+        p1 : Gene
+            Parent 1
+        p2 : Gene
+            Parent 2
+        """
         mask = GeneMask()
 
         params1 = GeneParams(
@@ -344,15 +405,15 @@ class GeneticAlgorithm:
 def main():
     config = Config.read_from_json()
 
-    ga = GeneticAlgorithm(config, Mutation(min=config.min_status, max=config.max_status))
+    ga = GeneticAlgorithm(config)
 
     start = time.time()
 
-    generation = ga.exec()
+    ga.exec()
 
     end = time.time() - start
 
-    # 最高スコアのパラメータでテストプレイ
+    # Test play with highest score parameter
     best_gene = ga.head(1)[0]
     ff = FitnessFunc(config)
     win_count = 0
@@ -363,7 +424,7 @@ def main():
             win_count += 1
 
     print(f"elapsed={end:.3f}sec")
-    print(f"generation={generation}\n{[g.to_s() for g in ga.head(5)]}")
+    print(f"{[g.to_s() for g in ga.head(5)]}")
     print(f"win={win_count / simulation_count * 100.0}%")
 
 

@@ -9,44 +9,44 @@ use uuid::Uuid;
 
 #[derive(Clone, Copy, Serialize, Deserialize, Debug)]
 struct Status {
-    /// 最大HP
+    /// Max HP
     max_hp: i32,
-    /// 攻撃力
+    /// Attack
     atk: i32,
-    /// 防御力
+    /// Defense
     def: i32,
-    /// 運(0~100)
+    /// Luck(0~100)
     luc: i32,
-    /// 速度
+    /// Speed
     speed: i32,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 struct Config {
-    /// 遺伝子数
+    /// Number of genes
     gene_num: i32,
-    /// 選択率(0~1.0)
+    /// Selection rate(0~1.0)
     selection_rate: f32,
-    /// 突然変異率(0~1.0)
+    /// Mutation rate(0~1.0)
     mutation_rate: f32,
-    /// 最大世代数
+    /// Maximum number of generations
     generation_max: i32,
-    /// 最小ターン数
+    /// Minimum number of turns
     turn_min: i32,
-    /// 最大ターン数
+    /// Maximum number of turns
     turn_max: i32,
-    /// 最小ステータス値
+    /// Minimum status value
     min_status: Status,
-    /// 最大ステータス値
+    /// Maximum status value
     max_status: Status,
-    /// キャラクターのステータス
+    /// Player's status
     character_status: Status,
-    /// GAの経過を表示するか
+    /// True if you want to display the progress
     show_progress: bool,
 }
 
 impl Config {
-    /// config.jsonからConfigを読み込みます
+    /// Loads Config from config.json.
     fn read_from_json() -> Self {
         let content = fs::read_to_string("config.json")
             .expect("Failed to load config.json");
@@ -116,7 +116,7 @@ enum BattleResult {
 }
 
 /// # Returns
-/// BattleResultと終了ターン数のタプルを返します
+/// Returns a tuple of BattleResult and the number of turns completed.
 fn battle(character: &mut Unit, monster: Unit, config: &Config) -> (BattleResult, i32) {
     let mut rng = rand::thread_rng();
 
@@ -146,7 +146,7 @@ fn battle(character: &mut Unit, monster: Unit, config: &Config) -> (BattleResult
                 continue;
             }
 
-            // 攻撃対象
+            // Target of an attack
             let defender = if attacker.is_monster {
                 character.clone()
             } else {
@@ -206,10 +206,10 @@ impl FitnessFunc {
 
         let (result, turn) = battle(&mut character, monster, &self.config);
 
-        // 残りHPの割合
+        // Percentage of HP remaining
         let hp_ratio = character.hp as f32 / character.max_hp as f32;
 
-        // 適合度
+        // Fitness
         let score = if result == BattleResult::GameOver {
             WORST_SCORE
         } else if result == BattleResult::Draw {
@@ -232,7 +232,7 @@ impl FitnessFunc {
     }
 }
 
-/// GAで求めるパラメータセット
+/// Parameters of Gene
 type GeneParams = Status;
 
 #[derive(Clone, Copy, Debug)]
@@ -271,6 +271,7 @@ struct GeneMask {
 }
 
 impl GeneMask {
+    /// Generates true or false mask for each field at random.
     fn new() -> Self {
         let mut rng = rand::thread_rng();
         GeneMask {
@@ -289,7 +290,7 @@ struct Mutation {
 }
 
 impl Mutation {
-    /// ランダムに遺伝子を生成します
+    /// Generates individuals at random.
     fn new_at_random(&self) -> Gene {
         let mut rng = rand::thread_rng();
         let hp = Uniform::from(self.min.max_hp..=self.max.max_hp);
@@ -308,7 +309,7 @@ impl Mutation {
         Gene::new(params)
     }
 
-    /// 突然変異させます
+    /// Mutates.
     fn mutated(&self, gene: &Gene, rate: f32) -> Gene {
         let mut rng = rand::thread_rng();
         let hp = Uniform::from(self.min.max_hp..=self.max.max_hp);
@@ -341,74 +342,69 @@ impl Mutation {
 
 struct GeneticAlgorithm {
     config: Config,
-    mutation: Mutation,
     genes: Vec<Gene>,
 }
 
 impl GeneticAlgorithm {
-    ///
-    /// # Arguments
-    /// * `config` - 設定
-    /// * `mutation` - 突然変異の実装
-    fn new(config: Config, mutation: Mutation) -> Self {
+    fn new(config: Config) -> Self {
         let genes: Vec<Gene> = vec![];
         GeneticAlgorithm {
             config,
-            mutation,
             genes,
         }
     }
 
-    /// 次世代に残す遺伝子の数を返します
+    /// Returns the number of individuals to leave to the next generation.
     fn selection_num(&self) -> usize {
         (self.config.gene_num as f32 * self.config.selection_rate).floor() as usize
     }
 
-    /// ベストスコアを返します
+    /// Returns the best score.
     fn best_score(&self) -> Fitness {
         self.genes[0].fitness
     }
 
-    /// 先頭から指定個数分の遺伝子を返します
+    /// Returns the specified number of individuals from the head.
     fn head(&self, num: usize) -> Vec<Gene> {
         (&self.genes[..num]).to_vec()
     }
 
-    /// ランダムで選ばれた1つの遺伝子を返します
+    /// Returns one randomly selected individual.
     fn sample(&self) -> Gene {
         let mut rng = rand::thread_rng();
         let idx = Uniform::from(0..self.genes.len());
         self.genes[idx.sample(&mut rng)].clone()
     }
 
-    /// アルゴリズムを実行します
-    ///
-    /// # Returns
-    /// 世代数を返します
-    fn exec(&mut self) -> i32 {
+    /// Executes the genetic algorithm.
+    fn exec(&mut self) {
         let gene_num = self.config.gene_num as usize;
 
-        // 次世代に残す遺伝子の数
         let selection_num = self.selection_num();
 
-        // 初期世代の生成
+        let mutation = Mutation {
+            min: self.config.min_status.clone(),
+            max: self.config.max_status.clone(),
+        };
+
+        // Generates initial generation
         for _ in 0..gene_num {
-            self.genes.push(self.mutation.new_at_random());
+            self.genes.push(mutation.new_at_random());
         }
 
         let ff = FitnessFunc::new(self.config.clone());
 
-        // 適合度計算
+        // Calculates the fitness each individual
         for gene in self.genes.iter_mut() {
             gene.fitness = ff.calc(&gene.params).0;
         }
 
-        // 現在のベストスコア
+        // Current best score
         let mut cur_best_score = WORST_SCORE;
-        // 現在の世代
+        // Current generation
         let mut generation = 1;
         loop {
-            // 適合度降順(優良順)にソート (優良順はfitnessの値が小さい順)
+            // Sorts in descending order of goodness of fitness
             self.genes.sort_by(|a, b| a.fitness.partial_cmp(&b.fitness).unwrap());
 
             let best_score = self.best_score();
@@ -422,31 +418,31 @@ impl GeneticAlgorithm {
                 break;
             }
 
-            // 選択
-            // 優良個体を次世代に残す
+            // Selection
+            // Leaves superior individuals to the next generation
             let mut new_genes = self.head(selection_num);
 
-            // 選択されなかった個数分、交叉・突然変異により生成する
+            // Generates individuals by crossover and mutation for the number of unselected
             loop {
-                // 両親の選択
+                // Selects parents
                 let parents = self.select_parents();
-                // 交叉
+                // Crossover
                 let children = self.crossover(&parents.0, &parents.1);
 
-                // 子1
-                // 突然変異
-                let mut g1 = self.mutation.mutated(&children.0, self.config.mutation_rate);
-                // 適合度計算
+                // Child1
+                // Mutation
+                let mut g1 = mutation.mutated(&children.0, self.config.mutation_rate);
+                // Calculates the fitness
                 g1.fitness = ff.calc(&g1.params).0;
                 new_genes.push(g1);
                 if new_genes.len() == gene_num {
                     break;
                 }
 
-                // 子2
-                // 突然変異
-                let mut g2 = self.mutation.mutated(&children.1, self.config.mutation_rate);
-                // 適合度計算
+                // Child2
+                // Mutation
+                let mut g2 = mutation.mutated(&children.1, self.config.mutation_rate);
+                // Calculates the fitness
                 g2.fitness = ff.calc(&g2.params).0;
                 new_genes.push(g2);
                 if new_genes.len() == gene_num {
@@ -458,15 +454,13 @@ impl GeneticAlgorithm {
 
             generation += 1;
         }
-
-        generation
     }
 
-    /// ランダムに親を選出します
+    /// Selects parents at random.
     fn select_parents(&self) -> (Gene, Gene) {
-        let p1: Gene = self.sample();
+        let p1 = self.sample();
         let p2 = loop {
-            let p2: Gene = self.sample();
+            let p2 = self.sample();
             if p1.id != p2.id {
                 break p2;
             }
@@ -474,15 +468,14 @@ impl GeneticAlgorithm {
         (p1, p2)
     }
 
-    /// 親1と親2を交叉して新しい遺伝子を生成します
+    /// Parent 1 and Parent 2 are crossed to produce new individuals.
     ///
     /// # Arguments
     /// * `p1` - Parent 1
     /// * `p2` - Parent 2
     fn crossover(&self, p1: &Gene, p2: &Gene) -> (Gene, Gene) {
-        let mask: GeneMask = GeneMask::new();
+        let mask = GeneMask::new();
 
-        // 一様交叉
         let params1 = GeneParams {
             max_hp: if mask.max_hp { p2.params.max_hp } else { p1.params.max_hp },
             atk: if mask.atk { p2.params.atk } else { p1.params.atk },
@@ -504,20 +497,16 @@ impl GeneticAlgorithm {
 fn main() {
     let config = Config::read_from_json();
 
-    let mut ga = GeneticAlgorithm::new(config.clone(),
-                                       Mutation {
-                                           min: config.min_status.clone(),
-                                           max: config.max_status.clone(),
-                                       });
+    let mut ga = GeneticAlgorithm::new(config.clone());
 
     let start = Instant::now();
 
-    let generation = ga.exec();
+    ga.exec();
 
     let end = start.elapsed();
 
-    // 最高スコアのパラメータでテストプレイ
-    let best_gene: Gene = ga.head(1)[0];
+    // Test play with highest score parameter
+    let best_gene = ga.head(1)[0];
     let ff = FitnessFunc::new(config);
     let mut win_count = 0;
     let simulation_count = 100;
@@ -529,9 +518,6 @@ fn main() {
     }
 
     println!("elapsed={}.{:03}sec", end.as_secs(), end.subsec_nanos() / 1_000_000);
-    println!("generation={}\n{:#?}",
-             generation,
-             ga.head(5).iter().map(|g| g.to_s()).collect::<Vec<String>>()
-    );
+    println!("{:#?}", ga.head(5).iter().map(|g| g.to_s()).collect::<Vec<String>>());
     println!("win={}%", win_count as f32 / simulation_count as f32 * 100.0);
 }
