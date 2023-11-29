@@ -505,7 +505,7 @@ fn main() {
 
     let end = start.elapsed();
 
-    // Test play with highest score parameter
+    // Test play with the highest score parameter
     let best_gene = ga.head(1)[0];
     let ff = FitnessFunc::new(config);
     let mut win_count = 0;

@@ -413,7 +413,7 @@ def main():
 
     end = time.time() - start
 
-    # Test play with highest score parameter
+    # Test play with the highest score parameter
     best_gene = ga.head(1)[0]
     ff = FitnessFunc(config)
     win_count = 0
