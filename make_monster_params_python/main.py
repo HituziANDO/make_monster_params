@@ -248,33 +248,6 @@ class GeneMask:
         self.speed = random.choice([True, False])
 
 
-class Mutation:
-    def __init__(self, min: Status, max: Status):
-        self.min = min
-        self.max = max
-
-    def new_at_random(self) -> Gene:
-        """ Generates individuals at random. """
-        params = GeneParams(
-            max_hp=random.randint(self.min.max_hp, self.max.max_hp),
-            atk=random.randint(self.min.atk, self.max.atk),
-            def_=random.randint(self.min.def_, self.max.def_),
-            luc=random.randint(self.min.luc, self.max.luc),
-            speed=random.randint(self.min.speed, self.max.speed)
-        )
-        return Gene(params)
-
-    def mutated(self, gene: Gene, rate: float) -> Gene:
-        """ Mutates. """
-        return Gene(GeneParams(
-            max_hp=gene.params.max_hp if random.random() > rate else random.randint(self.min.max_hp, self.max.max_hp),
-            atk=gene.params.atk if random.random() > rate else random.randint(self.min.atk, self.max.atk),
-            def_=gene.params.def_ if random.random() > rate else random.randint(self.min.def_, self.max.def_),
-            luc=gene.params.luc if random.random() > rate else random.randint(self.min.luc, self.max.luc),
-            speed=gene.params.speed if random.random() > rate else random.randint(self.min.speed, self.max.speed)
-        ))
-
-
 class GeneticAlgorithm:
     def __init__(self, config: Config):
         self.config = config
@@ -302,11 +275,9 @@ class GeneticAlgorithm:
 
         selection_num = self.selection_num()
 
-        mutation = Mutation(min=self.config.min_status, max=self.config.max_status)
-
         # Generates initial generation
         for _ in range(gene_num):
-            self.genes.append(mutation.new_at_random())
+            self.genes.append(self.generate())
 
         ff = FitnessFunc(self.config)
 
@@ -344,7 +315,7 @@ class GeneticAlgorithm:
 
                 # Child1
                 # Mutation
-                g1 = mutation.mutated(children[0], self.config.mutation_rate)
+                g1 = self.mutated(children[0])
                 # Calculates the fitness
                 g1.fitness = ff.calc(g1.params)[0]
                 new_genes.append(g1)
@@ -353,7 +324,7 @@ class GeneticAlgorithm:
 
                 # Child2
                 # Mutation
-                g2 = mutation.mutated(children[1], self.config.mutation_rate)
+                g2 = self.mutated(children[1])
                 # Calculates the fitness
                 g2.fitness = ff.calc(g2.params)[0]
                 new_genes.append(g2)
@@ -363,6 +334,19 @@ class GeneticAlgorithm:
             self.genes = new_genes
 
             generation += 1
+
+    def generate(self) -> Gene:
+        """ Generates individuals at random. """
+        min = self.config.min_status
+        max = self.config.max_status
+        params = GeneParams(
+            max_hp=random.randint(min.max_hp, max.max_hp),
+            atk=random.randint(min.atk, max.atk),
+            def_=random.randint(min.def_, max.def_),
+            luc=random.randint(min.luc, max.luc),
+            speed=random.randint(min.speed, max.speed)
+        )
+        return Gene(params)
 
     def select_parents(self) -> Tuple[Gene, Gene]:
         """ Selects parents at random. """
@@ -400,6 +384,19 @@ class GeneticAlgorithm:
             speed=p1.params.speed if mask.speed else p2.params.speed
         )
         return Gene(params1), Gene(params2)
+
+    def mutated(self, gene: Gene) -> Gene:
+        """ Mutates. """
+        min = self.config.min_status
+        max = self.config.max_status
+        rate = self.config.mutation_rate
+        return Gene(GeneParams(
+            max_hp=gene.params.max_hp if random.random() > rate else random.randint(min.max_hp, max.max_hp),
+            atk=gene.params.atk if random.random() > rate else random.randint(min.atk, max.atk),
+            def_=gene.params.def_ if random.random() > rate else random.randint(min.def_, max.def_),
+            luc=gene.params.luc if random.random() > rate else random.randint(min.luc, max.luc),
+            speed=gene.params.speed if random.random() > rate else random.randint(min.speed, max.speed)
+        ))
 
 
 def main():

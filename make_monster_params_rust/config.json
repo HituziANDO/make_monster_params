@@ -23,7 +23,7 @@
     "max_hp": 200,
     "atk": 15,
     "def": 10,
-    "luc": 5,
+    "luc": 0,
     "speed": 50
   },
   "show_progress": false

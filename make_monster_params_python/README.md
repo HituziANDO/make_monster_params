@@ -2,6 +2,13 @@
 
 Monster Parameter Generation Tool
 
+## Environment
+
+```
+python -V
+> Python 3.11.5
+```
+
 ## Usage
 
 1. Edit config.json

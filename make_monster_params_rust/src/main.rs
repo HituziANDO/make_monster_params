@@ -284,62 +284,6 @@ impl GeneMask {
     }
 }
 
-struct Mutation {
-    min: Status,
-    max: Status,
-}
-
-impl Mutation {
-    /// Generates individuals at random.
-    fn new_at_random(&self) -> Gene {
-        let mut rng = rand::thread_rng();
-        let hp = Uniform::from(self.min.max_hp..=self.max.max_hp);
-        let atk = Uniform::from(self.min.atk..=self.max.atk);
-        let def = Uniform::from(self.min.def..=self.max.def);
-        let luc = Uniform::from(self.min.luc..=self.max.luc);
-        let speed = Uniform::from(self.min.speed..=self.max.speed);
-
-        let params = GeneParams {
-            max_hp: hp.sample(&mut rng),
-            atk: atk.sample(&mut rng),
-            def: def.sample(&mut rng),
-            luc: luc.sample(&mut rng),
-            speed: speed.sample(&mut rng),
-        };
-        Gene::new(params)
-    }
-
-    /// Mutates.
-    fn mutated(&self, gene: &Gene, rate: f32) -> Gene {
-        let mut rng = rand::thread_rng();
-        let hp = Uniform::from(self.min.max_hp..=self.max.max_hp);
-        let atk = Uniform::from(self.min.atk..=self.max.atk);
-        let def = Uniform::from(self.min.def..=self.max.def);
-        let luc = Uniform::from(self.min.luc..=self.max.luc);
-        let speed = Uniform::from(self.min.speed..=self.max.speed);
-        let mut params = gene.params.clone();
-
-        // rng.gen::<f32>() -> 0 <= p < 1.0
-        if rng.gen::<f32>() <= rate {
-            params.max_hp = hp.sample(&mut rng);
-        }
-        if rng.gen::<f32>() <= rate {
-            params.atk = atk.sample(&mut rng);
-        }
-        if rng.gen::<f32>() <= rate {
-            params.def = def.sample(&mut rng);
-        }
-        if rng.gen::<f32>() <= rate {
-            params.luc = luc.sample(&mut rng);
-        }
-        if rng.gen::<f32>() <= rate {
-            params.speed = speed.sample(&mut rng);
-        }
-
-        Gene::new(params)
-    }
-}
-
 struct GeneticAlgorithm {
     config: Config,
     genes: Vec<Gene>,
@@ -382,14 +326,9 @@ impl GeneticAlgorithm {
 
         let selection_num = self.selection_num();
 
-        let mutation = Mutation {
-            min: self.config.min_status.clone(),
-            max: self.config.max_status.clone(),
-        };
-
         // Generates initial generation
         for _ in 0..gene_num {
-            self.genes.push(mutation.new_at_random());
+            self.genes.push(self.generate());
         }
 
         let ff = FitnessFunc::new(self.config.clone());
@@ -431,7 +370,7 @@ impl GeneticAlgorithm {
 
                 // Child1
                 // Mutation
-                let mut g1 = mutation.mutated(&children.0, self.config.mutation_rate);
+                let mut g1 = self.mutated(&children.0);
                 // Calculates the fitness
                 g1.fitness = ff.calc(&g1.params).0;
                 new_genes.push(g1);
@@ -441,7 +380,7 @@ impl GeneticAlgorithm {
 
                 // Child2
                 // Mutation
-                let mut g2 = mutation.mutated(&children.1, self.config.mutation_rate);
+                let mut g2 = self.mutated(&children.1);
                 // Calculates the fitness
                 g2.fitness = ff.calc(&g2.params).0;
                 new_genes.push(g2);
@@ -454,6 +393,26 @@ impl GeneticAlgorithm {
 
             generation += 1;
         }
+    }
+
+    /// Generates individuals at random.
+    fn generate(&self) -> Gene {
+        let min = &self.config.min_status;
+        let max = &self.config.max_status;
+        let mut rng = rand::thread_rng();
+        let hp = Uniform::from(min.max_hp..=max.max_hp);
+        let atk = Uniform::from(min.atk..=max.atk);
+        let def = Uniform::from(min.def..=max.def);
+        let luc = Uniform::from(min.luc..=max.luc);
+        let speed = Uniform::from(min.speed..=max.speed);
+        let params = GeneParams {
+            max_hp: hp.sample(&mut rng),
+            atk: atk.sample(&mut rng),
+            def: def.sample(&mut rng),
+            luc: luc.sample(&mut rng),
+            speed: speed.sample(&mut rng),
+        };
+        Gene::new(params)
     }
 
     /// Selects parents at random.
@@ -491,6 +450,39 @@ impl GeneticAlgorithm {
             speed: if mask.speed { p1.params.speed } else { p2.params.speed },
         };
         (Gene::new(params1), Gene::new(params2))
+    }
+
+    /// Mutates.
+    fn mutated(&self, gene: &Gene) -> Gene {
+        let min = &self.config.min_status;
+        let max = &self.config.max_status;
+        let rate = self.config.mutation_rate;
+        let mut rng = rand::thread_rng();
+        let hp = Uniform::from(min.max_hp..=max.max_hp);
+        let atk = Uniform::from(min.atk..=max.atk);
+        let def = Uniform::from(min.def..=max.def);
+        let luc = Uniform::from(min.luc..=max.luc);
+        let speed = Uniform::from(min.speed..=max.speed);
+        let mut params = gene.params.clone();
+
+        // rng.gen::<f32>() -> 0 <= p < 1.0
+        if rng.gen::<f32>() <= rate {
+            params.max_hp = hp.sample(&mut rng);
+        }
+        if rng.gen::<f32>() <= rate {
+            params.atk = atk.sample(&mut rng);
+        }
+        if rng.gen::<f32>() <= rate {
+            params.def = def.sample(&mut rng);
+        }
+        if rng.gen::<f32>() <= rate {
+            params.luc = luc.sample(&mut rng);
+        }
+        if rng.gen::<f32>() <= rate {
+            params.speed = speed.sample(&mut rng);
+        }
+
+        Gene::new(params)
     }
 }
 
